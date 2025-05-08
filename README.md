@@ -4,6 +4,10 @@ The final project for my FOSYMA (Fondaments des Systèmes Multi-Agents) class in
 ## Report
 The report is in the 13-EKEN.pdf file. The latex code for the report is in EKEN_RAPPORT.tex.
 
+https://github.com/user-attachments/assets/c65a5825-ee63-4eb1-96be-c095eda69585
+
+
+
 ## Code
 The code is written in Java, using the JADE / DEDALE framework. All of the code is in the eu.su.mas.dedale-eu-0.0.1-SNAPSHOT folder. To run the code, you need to initialize the project with Maven on Eclipse, then run the Principal.java file in the src/main/java/eu/su/mas/dedaleEtu/princ/ folder.
 
