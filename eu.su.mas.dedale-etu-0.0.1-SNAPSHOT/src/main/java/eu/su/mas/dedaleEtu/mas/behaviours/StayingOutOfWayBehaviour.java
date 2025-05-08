@@ -64,9 +64,9 @@ public class StayingOutOfWayBehaviour extends SimpleBehaviour {
 	public void action() {
 		AbstractDedaleAgent me = (AbstractDedaleAgent) this.myAgent;
 		if (me == null) return;
-		System.out.println();
-		System.out.println(this.myAgent.getLocalName() + " - NEW ACTION - CURRENT POSITION: " + (me.getCurrentPosition().getLocationId()));
-		System.out.println();
+		//System.out.println();
+		//System.out.println(this.myAgent.getLocalName() + " - NEW ACTION - CURRENT POSITION: " + (me.getCurrentPosition().getLocationId()));
+		//System.out.println();
 
 		// Current position
 		Location myPosition = me.getCurrentPosition();
@@ -100,6 +100,7 @@ public class StayingOutOfWayBehaviour extends SimpleBehaviour {
 			} catch (UnreadableException e) {
 				e.printStackTrace();
 			}
+			System.out.println(this.myAgent.getLocalName() + " - NEW ACTION - CURRENT POSITION: " + (me.getCurrentPosition().getLocationId()));
 			System.out.println(this.myAgent.getLocalName() + " - Received GET-OUT-OF-MY-WAY from: " + msgReceived.getSender().getLocalName() + " - Path: " + path + " getting out of the way.");
 			// if current position is equal to path, move to random adjacent node
 			System.out.println(this.myAgent.getLocalName() + " - Current position: " + myPositionId + " - Path: " + path);
@@ -108,7 +109,7 @@ public class StayingOutOfWayBehaviour extends SimpleBehaviour {
 				List<String> possibleMoves = new ArrayList<>();
 				for (int i = 1; i < lobs.size(); i++) {
 					String adjacentNodeId = lobs.get(i).getLeft().getLocationId();
-					if (!adjacentNodeId.equals(myPositionId)) {
+					if (!adjacentNodeId.equals(myPositionId) && !adjacentNodeId.equals(path)) {
 						possibleMoves.add(adjacentNodeId);
 					}
 				}
@@ -117,6 +118,36 @@ public class StayingOutOfWayBehaviour extends SimpleBehaviour {
 					int randomIndex = new Random().nextInt(possibleMoves.size());
 					GsLocation newpos = new GsLocation(possibleMoves.get(randomIndex));
 					System.out.println(this.myAgent.getLocalName() + " - Moving to random adjacent node: " + newpos.getLocationId() + " to avoid collision with " + msgReceived.getSender().getLocalName());
+					
+					// check if there is yet another agent in the cell in newpos
+					String agentAtNewPos = null;
+					for (Couple<Location, List<Couple<Observation, String>>> obs : lobs) {
+						//System.out.println("Observation: " + obs.getLeft().getLocationId() + " - " + obs.getRight());
+						if (obs.getLeft().getLocationId().equals(newpos.getLocationId())) {
+							// Check if there's an agent at this location
+							for (Couple<Observation, String> o : obs.getRight()) {
+								//System.out.println("Observation: " + o.getLeft() + " - " + o.getRight());
+								if (o.getLeft() == Observation.AGENTNAME) {
+									//System.out.println(this.myAgent.getLocalName() + " - Another agent detected at " + path.get(0) + ", avoiding collision.");
+									agentAtNewPos = o.getRight();
+									break;
+								}
+							}
+							break;
+						}
+					}
+
+					// if there is yet another agent in the new position, send GET-OUT-OF-MY-WAY to that agent
+					if (agentAtNewPos != null) {
+						System.out.println(this.myAgent.getLocalName() + " - Another agent detected at " + newpos.getLocationId() + ", sending it a GET-OUT-OF-MY-WAY message.");
+						// create receivers list that's just the agent that sent the message
+						List<String> temp_receivers = new ArrayList<>();
+						temp_receivers.add(agentAtNewPos);
+						// send GET-OUT-OF-MY-WAY message to the agent
+						myAgent.addBehaviour(new GetOutOfMyWayBehaviour(this.myAgent, newpos.getLocationId(), temp_receivers));
+						return;
+					}
+					
 					me.moveTo(newpos);
 					return;
 				} else {

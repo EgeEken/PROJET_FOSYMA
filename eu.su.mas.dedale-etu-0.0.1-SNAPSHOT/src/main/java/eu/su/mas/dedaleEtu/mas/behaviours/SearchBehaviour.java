@@ -34,7 +34,7 @@ public class SearchBehaviour extends SimpleBehaviour {
 	
 	private static final long serialVersionUID = 1L;
 
-	private static final int TIMER = 1000; // Time to wait between actions (in milliseconds)
+	private static final int TIMER = 100; // Time to wait between actions (in milliseconds)
 	
 	private boolean finished = false;
 	private MapRepresentation exploreMap; // Exploration map, unexplored nodes are open
@@ -661,7 +661,7 @@ public class SearchBehaviour extends SimpleBehaviour {
 			System.out.println(this.myAgent.getLocalName() + " - Exploration done, all agents are experts. Stopping agent. (Still listening for GET-OUT-OF-MY-WAY messages)");
 			finished = true;
 			// add an instance of "StayingOutOfWayBehaviour" to this agent's behaviours
-			myAgent.addBehaviour(new StayingOutOfWayBehaviour(this.myAgent, this.exploreMap, this.goldMap, this.diamondMap, this.tankerMap, this.receivers));
+			myAgent.addBehaviour(new StayingOutOfWayBehaviour(me, this.exploreMap, this.goldMap, this.diamondMap, this.tankerMap, this.receivers));
 			//System.out.println("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!");
 			//System.out.println("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!");
 			System.out.println("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!");
