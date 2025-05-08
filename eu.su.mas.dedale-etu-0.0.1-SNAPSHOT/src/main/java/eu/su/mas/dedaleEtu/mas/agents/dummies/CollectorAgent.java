@@ -7,6 +7,7 @@ import eu.su.mas.dedale.mas.agent.behaviours.platformManagment.StartMyBehaviours
 import eu.su.mas.dedaleEtu.mas.behaviours.SearchBehaviour;
 import eu.su.mas.dedaleEtu.mas.behaviours.ShareMultiMapBehaviour;
 import eu.su.mas.dedaleEtu.mas.behaviours.GetOutOfMyWayBehaviour;
+import eu.su.mas.dedaleEtu.mas.behaviours.StayingOutOfWayBehaviour;
 import eu.su.mas.dedaleEtu.mas.knowledge.MapRepresentation;
 import dataStructures.tuple.Couple;
 import jade.core.behaviours.Behaviour;

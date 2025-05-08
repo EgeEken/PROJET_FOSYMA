@@ -25,9 +25,8 @@ import jade.lang.acl.MessageTemplate;
 import jade.lang.acl.UnreadableException;
 
 /**
- * A behavior similar to ExploSoloBehaviour, but specialized in searching
- * and collecting a resource. If the target resource is visible, go pick it; otherwise continue
- * normal exploration.
+ * This behaviour is used to avoid blocking other agents when they are still active
+ * It only looks out for GET-OUT-OF-MY-WAY messages from other agents, 
  */
 public class StayingOutOfWayBehaviour extends SimpleBehaviour {
 	
@@ -35,19 +34,13 @@ public class StayingOutOfWayBehaviour extends SimpleBehaviour {
 
 	private static final int TIMER = 1000; // Time to wait between actions (in milliseconds)
 	
-	private boolean finished = false;
 	private MapRepresentation exploreMap; // Exploration map, unexplored nodes are open
 	private MapRepresentation goldMap; // Gold map, gold nodes with remaining gold are open
 	private MapRepresentation diamondMap; // Diamond map, diamond nodes are open
 	private MapRepresentation tankerMap; // Tanker map, tanker node is open
 
-	private int targetResourceIndex; // Index of the resource in the backpack (0 for gold, 1 for diamond)
-	private Observation targetResource; // Resource to search for (gold or diamond)
-
 	private List<String> receivers; // List of agents to send maps to
 
-	private HashMap<String, Boolean> expert_list; // List of agents that are experts (0 for non-expert, 1 for expert) (example: 001010 means agents 2 and 4 are experts, 0 1 3 5 are not)
-	
 	public StayingOutOfWayBehaviour(final AbstractDedaleAgent myagent, MapRepresentation exploreMap, 
 																	MapRepresentation goldMap, 
 																	MapRepresentation diamondMap, 
@@ -73,7 +66,6 @@ public class StayingOutOfWayBehaviour extends SimpleBehaviour {
 		if (me == null) return;
 		System.out.println();
 		System.out.println(this.myAgent.getLocalName() + " - NEW ACTION - CURRENT POSITION: " + (me.getCurrentPosition().getLocationId()));
-		System.out.println(this.myAgent.getLocalName() + " - Current backpack: " + (me.getBackPackFreeSpace()));
 		System.out.println();
 
 		// Current position
@@ -137,10 +129,10 @@ public class StayingOutOfWayBehaviour extends SimpleBehaviour {
 							break;
 						}
 					}
-					// create receivers list that's just the agent at newpos
+					// create receivers list that's just the agent that sent the message
 					List<String> temp_receivers = new ArrayList<>();
 					temp_receivers.add(msgReceived.getSender().getLocalName());
-					// send GET-OUT-OF-MY-WAY message to the agent at newpos
+					// send GET-OUT-OF-MY-WAY message to the agent
 					myAgent.addBehaviour(new GetOutOfMyWayBehaviour(this.myAgent, senderPositionId, temp_receivers));
 					return;
 				}

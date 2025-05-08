@@ -16,6 +16,7 @@ import eu.su.mas.dedale.mas.AbstractDedaleAgent;
 import eu.su.mas.dedaleEtu.mas.agents.dummies.CollectorAgent;
 import eu.su.mas.dedaleEtu.mas.behaviours.ShareMultiMapBehaviour;
 import eu.su.mas.dedaleEtu.mas.behaviours.GetOutOfMyWayBehaviour;
+import eu.su.mas.dedaleEtu.mas.behaviours.StayingOutOfWayBehaviour;
 import eu.su.mas.dedaleEtu.mas.knowledge.MapRepresentation;
 import eu.su.mas.dedaleEtu.mas.knowledge.MapRepresentation.MapAttribute;
 import jade.core.AID;
