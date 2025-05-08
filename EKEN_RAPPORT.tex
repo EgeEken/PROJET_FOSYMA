@@ -1,4 +1,4 @@
-\documentclass[a4paper, 12pt]{report}
+\documentclass[a4paper, 12pt]{article}
 
 % Adapté du tempate TER-M1 de l'Université de Paris
 
@@ -26,9 +26,9 @@
 \institute{Sorbonne University}
 \faculty{Master ANDROIDE / AI2D}
 \title{FOSYMA PROJECT - DEDALE}
-\subtitle{FoSyMa – Project Report 08/05/2025}
+\subtitle{FoSyMa Project Report -  08/05/2025}
 \author{
-\\Tarık Ege \textsc{EKEN} -- 21110611 -- \textbf{Group N°:} 13\\
+\\Tarık Ege \textsc{EKEN} -- 21110611 -- Group N°: 13\\
 \textbf{GitHub Repository}: {\href{https://github.com/EgeEken/PROJET_FOSYMA}{github.com/EgeEken/PROJET\_FOSYMA}}
 }
 
@@ -57,33 +57,27 @@
 %%%%%%%%%%%%
 
 \begin{document}
-    \maketitle
-    \romantableofcontents
 
-    \chapter{Introduction}
+\maketitle
+\tableofcontents
+\newpage
 
-    In this report I will present the strategies I implemented for this project, their architecture and methods of exploration, exploitation and communication. I used two main types of moving agents, the ExplorerAgent and CollectorAgent, as well as a silo agent, the DummyTankerAgent, which is stationary and quiet 
+\section {Introduction}
+In this report I will present the strategies I implemented for this project, their architecture and methods of exploration, exploitation and communication.
 
 \textbf{Highlights:}
 \begin{itemize}
-  \item Integrated exploration and resource search via a unified \texttt{SearchBehaviour}.
-  \item Periodic full-graph broadcasts (\texttt{ShareMultiMapBehaviour}) and depot-announcements (\texttt{SayHelloBehaviour}).
-  \item Resource collectors that compute shortest delivery routes using Dijkstra.
-  \item Analytical discussion of algorithmic complexity, communication load, and stopping conditions.
+  \item Exploration and resource search and collecting using \texttt{SearchBehaviour}
+  \item Multi-agent collision avoidance with \texttt{GetOutOfMyWayBehaviour}
+  \item Knowledge sharing with multiple specialized maps to simplify pathfinding and resource collection
+  \item Expert verification system to ensure complete exploration by all agents
+  \item Autonomous agent behavior with minimal centralized control
 \end{itemize}
 
 %===============================================================================
-% 2. SYSTEM ARCHITECTURE
+% 2. GENERAL ARCHITECTURE
 %===============================================================================
-\section{System Architecture}
-\subsection{JADE Initialization}
-The bootstrapper (\texttt{Principal.java}) reads \texttt{agent-custom.json} to configure:
-\begin{itemize}
-  \item Number and types of agents.
-  \item Graph size and generator settings.
-  \item Communication radius and resource parameters.
-\end{itemize}
-Subsequently, it launches agents in dedicated containers matching their roles.
+\section{General Architecture}
 
 \subsection{UML Diagram}
 \begin{figure}[H]
@@ -92,87 +86,122 @@ Subsequently, it launches agents in dedicated containers matching their roles.
         \caption{UML Diagram}
 \end{figure}
 
-%===============================================================================
-% 3. DESIGN DECISIONS
-%===============================================================================
-\section{Design Decisions}
+\subsection{Code Structure}
+The implementation consists of different components:
 
-\subsection{Exploration Strategy}
-We implemented Depth-First Search within \texttt{SearchBehaviour}. Agents maintain a stack of frontier nodes:
+\begin{itemize}
+  \item \textbf{Agents}: Three agent types with specific roles (Explorer, Collector, Tanker)
+  \item \textbf{Behaviours}: Four key behaviours controlling agent actions
+  \item \textbf{Maps}: Four specialized map representations tracking different environment aspects
+  \item \textbf{Communication protocols}: Multiple message types for map sharing and coordination
+\end{itemize}
+
+\subsection{Agents}
+My implementation uses three agent types:
+
+\begin{itemize}
+  \item \textbf{ExplorerAgent}: Focuses entirely on map exploration and information sharing
+  \item \textbf{CollectorAgent}: Specialized in collecting either gold or diamonds based on initialization parameters and returning them to tankers. But also explores and shares information
+  \item \textbf{DummyTankerAgent}: Stationary agent that serves as a storage point for collected resources
+\end{itemize}
+
+Each agent operates autonomously based on its observations and current knowledge state.
+
+\subsection{Behaviours}
+Four main behaviours implement the multi-agent system's functionality:
+
+\begin{itemize}
+  \item \textbf{SearchBehaviour}: Primary behaviour for exploration and resource collection, handling path planning, resource pickup, and map updates
+  \item \textbf{ShareMultiMapBehaviour}: Communication behaviour for sharing all map representations with all nearby agents
+  \item \textbf{GetOutOfMyWayBehaviour}: Collision avoidance by requesting other agents to move when blocking a path
+  \item \textbf{StayOutOfWayBehaviour}: Final dormant state for agents that have completed their tasks
+\end{itemize}
+
+\subsection{Maps}
+Each agent maintains four different map representations:
+
+\begin{itemize}
+  \item \textbf{exploreMap}: Tracks explored vs unexplored nodes in the environment
+  \item \textbf{goldMap}: Records locations where gold has been found and remains (open) or exhausted (closed)
+  \item \textbf{diamondMap}: Records locations where diamond has been found and diamonds remain (open) or exhausted (closed)
+  \item \textbf{tankerMap}: Marks locations of tanker agents for resource delivery, the tanker's position is not added to any of the other maps, since it can not be walked over, to avoid pathfinding issues
+\end{itemize}
+
+These maps are continuously updated as agents explore and are shared among agents to build a collective knowledge base.
+
+%===============================================================================
+% 3. STRATEGY
+%===============================================================================
+\section{Strategy}
+
+\subsection{Exploration}
+The behaviour \texttt{SearchBehaviour} handles both the exploration and exploitation for both \texttt{ExplorerAgent}s and \texttt{CollectorAgent}s. Each agent goes to the closest open node in their \texttt{exploreMap} using Dijkstra's Algorithm to find the best route.
 \begin{enumerate}
-  \item \textbf{Sense}: call \texttt{observe()} to gather local adjacency and resource info.
-  \item \textbf{Update}: record nodes and edges in \texttt{MapRepresentation}.
-  \item \textbf{Traverse}: push unexplored neighbors; pop to continue the search.
+  \item \textbf{Observe}: Calls \texttt{observe()} to observe adjacent nodes and check the current node's resource status
+  \item \textbf{Receive}: Receives messages sent by other agents in range
+  \item \textbf{Update}: Updates nodes and edges in the 4 \texttt{MapRepresentation}s
+  \item \textbf{Send}: Sends the updated maps to other agents in range
+  \item \textbf{Traverse}: Finds the closest open node in the \texttt{exploreMap} using Dijkstra's Algorithm and moves to it
 \end{enumerate}
 
-\textbf{Merits:} Minimal memory ($O(N)$), straightforward deep exploration.\\
-\textbf{Drawbacks:} Not shortest-path optimal; redundant visits possible.\\
-\textbf{Complexity:} $O(N+E)$ time, $O(N)$ memory.
+\textbf{Merits:} Straightforward, fast exploration\\
+\textbf{Drawbacks:} The order of nodes chosen for exploration is not necessarily the most efficient one in the long run\\
+\textbf{Complexity:} Dijkstra's Algorithm is $O(N+E)$ time, $O(N)$ memory
 
-\subsection{Information Exchange}
-Agents periodically broadcast their entire known map using \texttt{ShareMultiMapBehaviour}. The tanker agent uses \texttt{SayHelloBehaviour} to announce its presence.
+\subsection{Exploitation}
+The behaviour \texttt{SearchBehaviour} handles the resource collection for \texttt{CollectorAgent}s. Each collector agent has one type of resource they target, and aims to bring back to the closest tanker agent they know of.
+\begin{enumerate}
+  \item \textbf{Target Detection}: Checks current node for target resource
+  \item \textbf{Resource Collection}: Attempts to open lock and pick up resources if present
+  \item \textbf{Backpack Management}: Monitors backpack capacity and looks for a 
+  \item \textbf{Delivery}: Navigates to tanker and unloads collected resources
+\end{enumerate}
+
+\textbf{Merits:} Resource-specialized agents; efficient pathfinding to resources and tankers\\
+\textbf{Drawbacks:} Agents may compete for the same resources without coordination\\
+\textbf{Complexity:} Also uses Dijkstra's Algorithm for pathfinding, $O(N+E)$ time, $O(N)$ memory
+
+\subsection{Information Sharing}
+Agents broadcast all 4 of their maps using \texttt{ShareMultiMapBehaviour} every time they take action. This allows agents to rapidly exchange information without requiring extensive communication measures, but comes at the cost of a lot of redundant messages. Each received map is then merged with the agent's current map before making a new decision.
 
 \textbf{Merits:} Simple to implement, resilient to message loss.\\
-\textbf{Drawbacks:} High bandwidth; no incremental updates.\\
-\textbf{Cost:} $O(|V|+|E|)$ bytes per broadcast.
+\textbf{Drawbacks:} High bandwidth; no incremental updates. Does not wait for an ack to send maps, which causes a lot of message loss\\
+\textbf{Cost:} $O(4*(|V|+|E|))$ bytes per broadcast. (4 maps)
 
-\subsection{Coordination Mechanisms}
-Coordination is implicit through shared maps:
+\subsection{Collision / Blocking avoidance}
+When agents encounter another agent on their path, they send a GET-OUT-OF-MY-WAY (GOOMW) message, using \texttt{GetOutOfMyWayBehaviour}, which signals the agent they detected to move out of the way. On the event that an agent that has been requested to move is unable to do so due to having no alternative edges to move through, they send back a GOOMW message to the agent they received it from. They can also send it to another agent that is blocking their path while trying to get away from the first agent's path, creating a chain reaction that prevents blocking due to too many agents piled up.
+
+\textbf{Merits:} Cheap messages, no need to broadcast to all nearby agents like \texttt{ShareMultiMapBehaviour}, only one message sent at a time\\
+\textbf{Drawbacks:} Latency between updates; potential for redundant effort.\\
+\textbf{Cost:} 6 bytes per broadcast. (3 characters per message, sent to only one agent at a time)
+
+\subsection{Expert Verification}
+Explorer and Collector agents that have finished their tasks of exploration, and have an \texttt{exploreMap} that has no open nodes left are deemed "experts", and they randomly move around the map sharing their \texttt{expert\_list} with other agents, which they merge to make sure everyone else is also an expert, when an agent's \texttt{expert\_list} is completed, meaning that it knows every other agent is an expert, it is deemed a super expert, and it stops moving around, going in a sort of idle state controlled by \texttt{StayOutOfWayBehaviour}.
+
+\textbf{Merits:} Verifies that all other maps know the whole map, ensuring it is safe to stop exploring and sharing information\\
+\textbf{Drawbacks:} Random walk following the end of exploration to find non-expert agents relies on luck.
+
+\subsection{Final Dormant State (StayOutOfWayBehaviour)}
+As exploration and exploitation are completed, and every agent has been made sure to be experts, there is still a chance that there are experts out there that need to finish emptying their backpacks, in which case, a fully inactive agent might block their path toward a tanker. So super expert agents are instead placed in a dormant state using \texttt{StayOutOfWayBehaviour}, which only listens for GOOMW messages, and moves out of the way if requested, and do nothing else.
+
+\textbf{Merits:} Prevents blocking by inactive agents, with no cost of movement or communication\\
+\textbf{Drawbacks:} Depending on the goal of "efficiency", it might be considered more efficient to simply move to a distant corner of the topology under the assumption that the agent won't be in anyone's way, rather than wait to be moved, but this isn't necessarily the case\\
+
+
+%===============================================================================
+% 4. REFLECTION & FUTURE WORK
+%===============================================================================
+\section{Synthesis, Critique and Possible Improvements}
+My implementation manages to successfully explore any given topology I tested it out on, and gather and store resources effectively. But unfortunately there are some issues that I have been unable to fix in time:
+
 \begin{itemize}
-  \item Explorers identify unvisited frontiers cooperatively.
-  \item Collectors query merged maps to locate nearest resources.
-  \item The tanker’s beacon ensures collectors know where to return when full.
+    \item Due to some obscure concurrency problem, during collision avoidance, agents make multiple moves during the same time agents in the rest of the map make one move, I was unable to fix this bug after hours of debugging, and even a complete overhaul of the collision avoidance system
+    \item The strategy is not particularly well prepared to confront a golem/adversarial mechanism
+    \item There is a lot of message loss, since the agents do not verify if another agent is indeed in range with a smaller message before sending all 4 maps which results in very expensive messages being sent every turn by every agent, and most of them getting lost
+    \item There isn't a centralized decision-making process, or explicit area assignment, or role shifts between agents, each agents acts autonomously, making their decisions based on their situation and observations, rather than taking orders. This has its pros and cons however, it also makes them require less strategic communication in principle
+    \item Due to the partly luck based nature of the collision avoidance and expert verification systems, there is a chance that verification takes a long time stuck in semi-loops going back and forth between two agents before one of them manages to break out
 \end{itemize}
 
-\textbf{Merits:} Fully decentralized; no leader election.\\
-\textbf{Drawbacks:} Latency between updates; potential for redundant effort.
-
-\subsection{Resource Gathering}
-Collectors follow a two-phase routine:
-\begin{enumerate}
-  \item \textbf{Hunting}: random exploration until a resource is detected.
-  \item \textbf{Delivery}: compute shortest path to the tanker via Dijkstra and move accordingly.
-\end{enumerate}
-
-\textbf{Merits:} Shortest-path guarantee for delivery.\\
-\textbf{Drawbacks:} Initial random walk is suboptimal; no resource prioritization.\\
-\textbf{Complexity:} Delivery $O(E + V\log V)$ per Dijkstra run.
-
-\subsection{Collision Avoidance}
-Agents mark occupied nodes upon observation and avoid moving into them, deferring when necessary. The JADE scheduler resolves simultaneous move requests by delaying one action.
-
-\textbf{Merits:} Prevents deadlocks and state overlap.\\
-\textbf{Drawbacks:} Increased latency in congested areas.\\
-\textbf{Cost:} $O(d)$ per move decision, where $d$ is node degree.
-
-%===============================================================================
-% 4. ALGORITHMIC ANALYSIS
-%===============================================================================
-\section{Algorithmic Analysis}
-\subsection{DFS-Based Exploration}
-Described in Section 3.1; stopping when the frontier stack empties.
-
-\subsection{Map Merging}
-Upon receiving a peer’s map, agents merge node/edge sets in $O(n_a + n_b + e_a + e_b)$ time. Termination is detected when no new information appears.
-
-\subsection{Shortest-Path Routing}
-Collectors use Dijkstra: $O(E + V\log V)$ complexity; optimal under uniform weights; resets backpack once unloading completes.
-
-\subsection{Communication Throughput}
-Each tick generates $A$ broadcasts of size $O(|V|+|E|)$, where $A$ is the number of agents. This dominates overall network load.
-
-%===============================================================================
-% 5. REFLECTION & FUTURE WORK
-%===============================================================================
-\section{Reflection \& Future Work}
-Our implementation fulfills core exploration and collection requirements, but omits several advanced features:
-\begin{itemize}
-  \item \textbf{Adversarial Golems}: No modeling of moving threat agents that relocate resources.
-  \item \textbf{Collaborative Lockpicking}: Agents act individually rather than pooling capabilities.
-  \item \textbf{Incremental Updates}: Full-graph broadcasts could be replaced by delta exchanges.
-  \item \textbf{Task Allocation}: Explicit frontier assignment or auction-based role shifts.
-\end{itemize}
-
-Enhancements such as dynamic agent roles, event-driven communication, and adversary-aware planning would complete the FoSyMa vision while improving efficiency.
+Improving the communication system and perhaps a more centralized strategy could make my implementation more effective.
 
 \end{document}
