@@ -1,48 +1,68 @@
-\documentclass[a4paper,11pt]{article}
-\usepackage[utf8]{inputenc}
-\usepackage[T1]{fontenc}
-\usepackage{graphicx}
-\usepackage{hyperref}
-\usepackage{geometry}
-\geometry{margin=1in}
+\documentclass[a4paper, 12pt]{report}
 
-% Helper to include figures if available, otherwise show placeholder
-\newcommand{\includefigure}[2][]{%
-  \IfFileExists{#2}{\includegraphics[#1]{#2}}{\fbox{\textbf{Missing:} #2}}%
+% Adapté du tempate TER-M1 de l'Université de Paris
+
+%%%%%%%%%%%%
+% Packages %
+%%%%%%%%%%%%
+\usepackage{amsmath} % Nécessaire pour \text
+\usepackage{array}
+\usepackage{float} % Pour les images [H]
+\usepackage[english]{babel}
+\usepackage{hyperref}
+\usepackage[noheader]{packages/sleek}
+\usepackage{packages/sleek-title}
+\usepackage[english]{packages/sleek-theorems}
+\usepackage{packages/sleek-listings}
+\usepackage{tikz}
+\usepackage[english,linesnumbered,lined]{algorithm2e}
+\SetKwInput{KwResult}{R\'esultat}
+\SetKw{KwInput}{Entr\'ees}
+%%%%%%%%%%%%%%
+% Title-page %
+%%%%%%%%%%%%%%
+
+\logo{./images/logo_science.png}
+\institute{Sorbonne University}
+\faculty{Master ANDROIDE / AI2D}
+\title{FOSYMA PROJECT - DEDALE}
+\subtitle{FoSyMa – Project Report 08/05/2025}
+\author{
+\\Tarık Ege \textsc{EKEN} -- 21110611 -- \textbf{Group N°:} 13\\
+\textbf{GitHub Repository}: {\href{https://github.com/EgeEken/PROJET_FOSYMA}{github.com/EgeEken/PROJET\_FOSYMA}}
 }
 
+%%%%%%%%%%
+% Others %
+%%%%%%%%%%
+
+\lstdefinestyle{latex}{
+    language=TeX,
+    style=default,
+    %%%%%
+    commentstyle=\ForestGreen,
+    keywordstyle=\TrueBlue,
+    stringstyle=\VeronicaPurple,
+    emphstyle=\TrueBlue,
+    %%%%%
+    emph={LaTeX, usepackage, textit, textbf, textsc}
+}
+
+\FrameTBStyle{latex}
+
+\def\tbs{\textbackslash}
+
+%%%%%%%%%%%%
+% Document %
+%%%%%%%%%%%%
+
 \begin{document}
+    \maketitle
+    \romantableofcontents
 
-%===============================================================================
-% COVER PAGE
-%===============================================================================
-\begin{titlepage}
-  \centering
-  \vspace*{2cm}
-  {\LARGE \textbf{Collaborative Multi-Agent Treasure Retrieval}\\[1ex]
-  \large FoSyMa – Project Report 2025}\\[2cm]
+    \chapter{Introduction}
 
-  {\Large \textbf{Author:} Tarik Ege Eken (21110611)}\\[1.5cm]
-
-  {\large \textbf{Group \#:} 2}\\[2cm]
-
-  {\large \textbf{Source Code:} \href{https://github.com/EgeEken/PROJET_FOSYMA}{github.com/EgeEken/PROJET_FOSYMA-project}}\\
-
-  \vfill
-  {\large \today}
-\end{titlepage}
-
-%===============================================================================
-% TABLE OF CONTENTS
-%===============================================================================
-\tableofcontents
-\newpage
-
-%===============================================================================
-% 1. OVERVIEW
-%===============================================================================
-\section{Overview}
-This document describes the implementation of a decentralized multi-agent system for treasure gathering on an unknown graph. Leveraging the FoSyMa framework atop JADE and GraphStream, a team of agents with distinct roles cooperate to explore, share information, collect resources (gold and diamonds), and return them to a central deposit.
+    In this report I will present the strategies I implemented for this project, their architecture and methods of exploration, exploitation and communication. I used two main types of moving agents, the ExplorerAgent and CollectorAgent, as well as a silo agent, the DummyTankerAgent, which is stationary and quiet 
 
 \textbf{Highlights:}
 \begin{itemize}
@@ -66,11 +86,10 @@ The bootstrapper (\texttt{Principal.java}) reads \texttt{agent-custom.json} to c
 Subsequently, it launches agents in dedicated containers matching their roles.
 
 \subsection{UML Diagram}
-% Placeholder for UML: insert when available
-\begin{figure}[h]
-  \centering
-  \includefigure[width=0.8\textwidth]{uml_graph.png}
-  \caption{Proposed class and package structure.}
+\begin{figure}[H]
+        \centering
+        \includegraphics[width=1\textwidth]{images/UML.png}
+        \caption{UML Diagram}
 \end{figure}
 
 %===============================================================================
