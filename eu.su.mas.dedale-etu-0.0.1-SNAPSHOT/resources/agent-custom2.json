@@ -1,0 +1,47 @@
+[
+  
+{ 
+  "agentType":"agentExplo",
+  "agentName": "Explorer",
+  "communicationRange": 3,
+  "initialLocation": "free",
+  "backPackCapacityGold": -1,
+  "backPackCapacityDiamond":-1, 
+  "detectionRadius": 0,
+  "strengthExpertise": 1,
+  "lockPickingExpertise":1
+  },
+  { 
+    "agentType":"agentCollect",
+    "agentName": "GoldCollector",
+    "communicationRange": 3,
+    "initialLocation": "free",
+    "backPackCapacityGold": 20,
+    "backPackCapacityDiamond": 0, 
+    "detectionRadius": 0,
+    "strengthExpertise": 1,
+    "lockPickingExpertise":1
+    },
+  { 
+    "agentType":"agentCollect",
+    "agentName": "DiamondCollector",
+    "communicationRange": 3,
+    "initialLocation": "free",
+    "backPackCapacityGold": 0,
+    "backPackCapacityDiamond": 20, 
+    "detectionRadius": 0,
+    "strengthExpertise": 1,
+    "lockPickingExpertise":1
+    },
+  { 
+    "agentType":"agentTanker",
+    "agentName": "Tanker",
+    "communicationRange": 3,
+    "initialLocation": "free",
+    "backPackCapacityGold": 5000,
+    "backPackCapacityDiamond":5000, 
+    "detectionRadius": 0,
+    "strengthExpertise": 1,
+    "lockPickingExpertise":1
+    }
+]
