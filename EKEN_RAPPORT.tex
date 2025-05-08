@@ -1,0 +1,159 @@
+\documentclass[a4paper,11pt]{article}
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage{graphicx}
+\usepackage{hyperref}
+\usepackage{geometry}
+\geometry{margin=1in}
+
+% Helper to include figures if available, otherwise show placeholder
+\newcommand{\includefigure}[2][]{%
+  \IfFileExists{#2}{\includegraphics[#1]{#2}}{\fbox{\textbf{Missing:} #2}}%
+}
+
+\begin{document}
+
+%===============================================================================
+% COVER PAGE
+%===============================================================================
+\begin{titlepage}
+  \centering
+  \vspace*{2cm}
+  {\LARGE \textbf{Collaborative Multi-Agent Treasure Retrieval}\\[1ex]
+  \large FoSyMa – Project Report 2025}\\[2cm]
+
+  {\Large \textbf{Author:} Tarik Ege Eken (21110611)}\\[1.5cm]
+
+  {\large \textbf{Group \#:} 2}\\[2cm]
+
+  {\large \textbf{Source Code:} \href{https://github.com/EgeEken/PROJET_FOSYMA}{github.com/EgeEken/PROJET_FOSYMA-project}}\\
+
+  \vfill
+  {\large \today}
+\end{titlepage}
+
+%===============================================================================
+% TABLE OF CONTENTS
+%===============================================================================
+\tableofcontents
+\newpage
+
+%===============================================================================
+% 1. OVERVIEW
+%===============================================================================
+\section{Overview}
+This document describes the implementation of a decentralized multi-agent system for treasure gathering on an unknown graph. Leveraging the FoSyMa framework atop JADE and GraphStream, a team of agents with distinct roles cooperate to explore, share information, collect resources (gold and diamonds), and return them to a central deposit.
+
+\textbf{Highlights:}
+\begin{itemize}
+  \item Integrated exploration and resource search via a unified \texttt{SearchBehaviour}.
+  \item Periodic full-graph broadcasts (\texttt{ShareMultiMapBehaviour}) and depot-announcements (\texttt{SayHelloBehaviour}).
+  \item Resource collectors that compute shortest delivery routes using Dijkstra.
+  \item Analytical discussion of algorithmic complexity, communication load, and stopping conditions.
+\end{itemize}
+
+%===============================================================================
+% 2. SYSTEM ARCHITECTURE
+%===============================================================================
+\section{System Architecture}
+\subsection{JADE Initialization}
+The bootstrapper (\texttt{Principal.java}) reads \texttt{agent-custom.json} to configure:
+\begin{itemize}
+  \item Number and types of agents.
+  \item Graph size and generator settings.
+  \item Communication radius and resource parameters.
+\end{itemize}
+Subsequently, it launches agents in dedicated containers matching their roles.
+
+\subsection{UML Diagram}
+% Placeholder for UML: insert when available
+\begin{figure}[h]
+  \centering
+  \includefigure[width=0.8\textwidth]{uml_graph.png}
+  \caption{Proposed class and package structure.}
+\end{figure}
+
+%===============================================================================
+% 3. DESIGN DECISIONS
+%===============================================================================
+\section{Design Decisions}
+
+\subsection{Exploration Strategy}
+We implemented Depth-First Search within \texttt{SearchBehaviour}. Agents maintain a stack of frontier nodes:
+\begin{enumerate}
+  \item \textbf{Sense}: call \texttt{observe()} to gather local adjacency and resource info.
+  \item \textbf{Update}: record nodes and edges in \texttt{MapRepresentation}.
+  \item \textbf{Traverse}: push unexplored neighbors; pop to continue the search.
+\end{enumerate}
+
+\textbf{Merits:} Minimal memory ($O(N)$), straightforward deep exploration.\\
+\textbf{Drawbacks:} Not shortest-path optimal; redundant visits possible.\\
+\textbf{Complexity:} $O(N+E)$ time, $O(N)$ memory.
+
+\subsection{Information Exchange}
+Agents periodically broadcast their entire known map using \texttt{ShareMultiMapBehaviour}. The tanker agent uses \texttt{SayHelloBehaviour} to announce its presence.
+
+\textbf{Merits:} Simple to implement, resilient to message loss.\\
+\textbf{Drawbacks:} High bandwidth; no incremental updates.\\
+\textbf{Cost:} $O(|V|+|E|)$ bytes per broadcast.
+
+\subsection{Coordination Mechanisms}
+Coordination is implicit through shared maps:
+\begin{itemize}
+  \item Explorers identify unvisited frontiers cooperatively.
+  \item Collectors query merged maps to locate nearest resources.
+  \item The tanker’s beacon ensures collectors know where to return when full.
+\end{itemize}
+
+\textbf{Merits:} Fully decentralized; no leader election.\\
+\textbf{Drawbacks:} Latency between updates; potential for redundant effort.
+
+\subsection{Resource Gathering}
+Collectors follow a two-phase routine:
+\begin{enumerate}
+  \item \textbf{Hunting}: random exploration until a resource is detected.
+  \item \textbf{Delivery}: compute shortest path to the tanker via Dijkstra and move accordingly.
+\end{enumerate}
+
+\textbf{Merits:} Shortest-path guarantee for delivery.\\
+\textbf{Drawbacks:} Initial random walk is suboptimal; no resource prioritization.\\
+\textbf{Complexity:} Delivery $O(E + V\log V)$ per Dijkstra run.
+
+\subsection{Collision Avoidance}
+Agents mark occupied nodes upon observation and avoid moving into them, deferring when necessary. The JADE scheduler resolves simultaneous move requests by delaying one action.
+
+\textbf{Merits:} Prevents deadlocks and state overlap.\\
+\textbf{Drawbacks:} Increased latency in congested areas.\\
+\textbf{Cost:} $O(d)$ per move decision, where $d$ is node degree.
+
+%===============================================================================
+% 4. ALGORITHMIC ANALYSIS
+%===============================================================================
+\section{Algorithmic Analysis}
+\subsection{DFS-Based Exploration}
+Described in Section 3.1; stopping when the frontier stack empties.
+
+\subsection{Map Merging}
+Upon receiving a peer’s map, agents merge node/edge sets in $O(n_a + n_b + e_a + e_b)$ time. Termination is detected when no new information appears.
+
+\subsection{Shortest-Path Routing}
+Collectors use Dijkstra: $O(E + V\log V)$ complexity; optimal under uniform weights; resets backpack once unloading completes.
+
+\subsection{Communication Throughput}
+Each tick generates $A$ broadcasts of size $O(|V|+|E|)$, where $A$ is the number of agents. This dominates overall network load.
+
+%===============================================================================
+% 5. REFLECTION & FUTURE WORK
+%===============================================================================
+\section{Reflection \& Future Work}
+Our implementation fulfills core exploration and collection requirements, but omits several advanced features:
+\begin{itemize}
+  \item \textbf{Adversarial Golems}: No modeling of moving threat agents that relocate resources.
+  \item \textbf{Collaborative Lockpicking}: Agents act individually rather than pooling capabilities.
+  \item \textbf{Incremental Updates}: Full-graph broadcasts could be replaced by delta exchanges.
+  \item \textbf{Task Allocation}: Explicit frontier assignment or auction-based role shifts.
+\end{itemize}
+
+Enhancements such as dynamic agent roles, event-driven communication, and adversary-aware planning would complete the FoSyMa vision while improving efficiency.
+
+\end{document}
