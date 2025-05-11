@@ -377,7 +377,74 @@ public class MapRepresentation implements Serializable {
 				.findAny()).isPresent();
 	}
 
+	public void closeNode(String id) {
+		Node n=this.g.getNode(id);
+		if (n!=null) {
+			n.setAttribute("ui.class", MapAttribute.closed.toString());
+		}
+	}
 
+	public List<String> getShortestPathToClosestOpenNode_thatisntinlist(String myPosition, List<String> cantopenlist) {
+		//1) Get all openNodes
+		List<String> opennodes=getOpenNodes();
+		opennodes.removeAll(cantopenlist);
 
+		//2) select the closest one
+		List<Couple<String,Integer>> lc=
+				opennodes.stream()
+				.map(on -> (getShortestPath(myPosition,on)!=null)? new Couple<String, Integer>(on,getShortestPath(myPosition,on).size()): new Couple<String, Integer>(on,Integer.MAX_VALUE))//some nodes my be unreachable if the agents do not share at least one common node.
+				.collect(Collectors.toList());
+
+		Optional<Couple<String,Integer>> closest=lc.stream().min(Comparator.comparing(Couple::getRight));
+		//3) Compute shorterPath
+
+		return getShortestPath(myPosition,closest.get().getLeft());
+	}
+
+	public List<String> getShortestPath_withoutNode(String idFrom, String idTo, List<String> avoid) {
+    	List<String> shortestPath = new ArrayList<>();
+		
+    	// Temporarily remove avoided nodes
+    	List<Node> removedNodes = new ArrayList<>();
+    	for (String nodeId : avoid) {
+    	    Node node = g.getNode(nodeId);
+    	    if (node != null) {
+    	        removedNodes.add(node);
+    	        node.removeFromGraph();
+    	    }
+    	}
+	
+    	try {
+    	    Dijkstra dijkstra = new Dijkstra();
+    	    dijkstra.init(g);
+    	    dijkstra.setSource(g.getNode(idFrom));
+    	    dijkstra.compute();
+		
+    	    List<Node> path = dijkstra.getPath(g.getNode(idTo)) != null
+    	        ? dijkstra.getPath(g.getNode(idTo)).getNodePath()
+    	        : null;
+		
+    	    if (path == null || path.isEmpty()) {
+    	        return null;
+    	    }
+		
+    	    Iterator<Node> iter = path.iterator();
+    	    while (iter.hasNext()) {
+    	        shortestPath.add(iter.next().getId());
+    	    }
+    	    dijkstra.clear();
+		
+    	    if (!shortestPath.isEmpty()) {
+    	        shortestPath.remove(0); // remove the current position
+    	    }
+    	    return shortestPath.isEmpty() ? null : shortestPath;
+    	} finally {
+    	    // Restore removed nodes (re-add them to the graph)
+    	    for (Node node : removedNodes) {
+    	        g.addNode(node.getId());
+    	        // Optionally restore attributes if needed
+        	}
+    	}
+	}
 
 }

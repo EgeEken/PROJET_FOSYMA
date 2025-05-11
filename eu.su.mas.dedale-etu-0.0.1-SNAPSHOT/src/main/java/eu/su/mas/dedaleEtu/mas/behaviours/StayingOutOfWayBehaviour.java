@@ -139,6 +139,25 @@ public class StayingOutOfWayBehaviour extends SimpleBehaviour {
 
 					// if there is yet another agent in the new position, send GET-OUT-OF-MY-WAY to that agent
 					if (agentAtNewPos != null) {
+						// if the other agent is a wumpus, dont bother sending it a message, just go back to possibleMoves.isEmpty() case
+						if (agentAtNewPos.equals("Wumpus")) {
+							System.out.println(this.myAgent.getLocalName() + " - Another agent detected at " + newpos.getLocationId() + ", but it's a Wumpus, so I'm not sending it a message.");
+							System.out.println(this.myAgent.getLocalName() + " - No possible moves to avoid collision, staying in original position: " + myPositionId + " sending GET-OUT-OF-MY-WAY back to " + msgReceived.getSender().getLocalName());
+							// get position of the sender
+							String senderPositionId = null;
+							for (Couple<Location, List<Couple<Observation, String>>> l : lobs) {
+								if (l.getLeft().getLocationId().equals(msgReceived.getSender().getLocalName())) {
+									senderPositionId = l.getLeft().getLocationId();
+									break;
+								}
+							}
+							// create receivers list that's just the agent at newpos
+							List<String> temp_receivers = new ArrayList<>();
+							temp_receivers.add(msgReceived.getSender().getLocalName());
+							// send GET-OUT-OF-MY-WAY message to the agent at newpos
+							myAgent.addBehaviour(new GetOutOfMyWayBehaviour(this.myAgent, senderPositionId, temp_receivers));
+							return;
+						}
 						System.out.println(this.myAgent.getLocalName() + " - Another agent detected at " + newpos.getLocationId() + ", sending it a GET-OUT-OF-MY-WAY message.");
 						// create receivers list that's just the agent that sent the message
 						List<String> temp_receivers = new ArrayList<>();

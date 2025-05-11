@@ -34,7 +34,7 @@ public class SearchBehaviour extends SimpleBehaviour {
 	
 	private static final long serialVersionUID = 1L;
 
-	private static final int TIMER = 100; // Time to wait between actions (in milliseconds)
+	private static final int TIMER = 400; // Time to wait between actions (in milliseconds)
 	
 	private boolean finished = false;
 	private MapRepresentation exploreMap; // Exploration map, unexplored nodes are open
@@ -49,6 +49,8 @@ public class SearchBehaviour extends SimpleBehaviour {
 
 	private HashMap<String, Boolean> expert_list; // List of agents that are experts (0 for non-expert, 1 for expert) (example: 001010 means agents 2 and 4 are experts, 0 1 3 5 are not)
 	
+	private List<String> i_cant_open; // List of resource nodes that this agent can't open (lockpick failure)
+
 	public SearchBehaviour(final AbstractDedaleAgent myagent, MapRepresentation exploreMap, 
 																	MapRepresentation goldMap, 
 																	MapRepresentation diamondMap, 
@@ -82,6 +84,8 @@ public class SearchBehaviour extends SimpleBehaviour {
 		for (String agent : receivers) {
 			this.expert_list.put(agent, false); // All other agents start as non-experts
 		}
+
+		this.i_cant_open = new ArrayList<>(); // list of resource nodes that this agent can't open (lockpick failure)
 
 		this.finished = false; // Set to true when exploration is done
 	}
@@ -174,7 +178,7 @@ public class SearchBehaviour extends SimpleBehaviour {
 				List<String> possibleMoves = new ArrayList<>();
 				for (int i = 1; i < lobs.size(); i++) {
 					String adjacentNodeId = lobs.get(i).getLeft().getLocationId();
-					if (!adjacentNodeId.equals(myPositionId)) {
+					if (!adjacentNodeId.equals(myPositionId) && !adjacentNodeId.equals(path)) {
 						possibleMoves.add(adjacentNodeId);
 					}
 				}
@@ -183,6 +187,55 @@ public class SearchBehaviour extends SimpleBehaviour {
 					int randomIndex = new Random().nextInt(possibleMoves.size());
 					GsLocation newpos = new GsLocation(possibleMoves.get(randomIndex));
 					System.out.println(this.myAgent.getLocalName() + " - Moving to random adjacent node: " + newpos.getLocationId() + " to avoid collision with " + msgReceived.getSender().getLocalName());
+					
+					// check if there is yet another agent in the cell in newpos
+					String agentAtNewPos = null;
+					for (Couple<Location, List<Couple<Observation, String>>> obs : lobs) {
+						//System.out.println("Observation: " + obs.getLeft().getLocationId() + " - " + obs.getRight());
+						if (obs.getLeft().getLocationId().equals(newpos.getLocationId())) {
+							// Check if there's an agent at this location
+							for (Couple<Observation, String> o : obs.getRight()) {
+								//System.out.println("Observation: " + o.getLeft() + " - " + o.getRight());
+								if (o.getLeft() == Observation.AGENTNAME) {
+									//System.out.println(this.myAgent.getLocalName() + " - Another agent detected at " + path.get(0) + ", avoiding collision.");
+									agentAtNewPos = o.getRight();
+									break;
+								}
+							}
+							break;
+						}
+					}
+
+					// if there is yet another agent in the new position, send GET-OUT-OF-MY-WAY to that agent
+					if (agentAtNewPos != null) {
+						// if the other agent is a wumpus, dont bother sending it a message, just go back to possibleMoves.isEmpty() case
+						if (agentAtNewPos.equals("Wumpus")) {
+							System.out.println(this.myAgent.getLocalName() + " - Another agent detected at " + newpos.getLocationId() + ", but it's a Wumpus, so I'm not sending it a message.");
+							System.out.println(this.myAgent.getLocalName() + " - No possible moves to avoid collision, staying in original position: " + myPositionId + " sending GET-OUT-OF-MY-WAY back to " + msgReceived.getSender().getLocalName());
+							// get position of the sender
+							String senderPositionId = null;
+							for (Couple<Location, List<Couple<Observation, String>>> l : lobs) {
+								if (l.getLeft().getLocationId().equals(msgReceived.getSender().getLocalName())) {
+									senderPositionId = l.getLeft().getLocationId();
+									break;
+								}
+							}
+							// create receivers list that's just the agent at newpos
+							List<String> temp_receivers = new ArrayList<>();
+							temp_receivers.add(msgReceived.getSender().getLocalName());
+							// send GET-OUT-OF-MY-WAY message to the agent at newpos
+							myAgent.addBehaviour(new GetOutOfMyWayBehaviour(this.myAgent, senderPositionId, temp_receivers));
+							return;
+						}
+						System.out.println(this.myAgent.getLocalName() + " - Another agent detected at " + newpos.getLocationId() + ", sending it a GET-OUT-OF-MY-WAY message.");
+						// create receivers list that's just the agent that sent the message
+						List<String> temp_receivers = new ArrayList<>();
+						temp_receivers.add(agentAtNewPos);
+						// send GET-OUT-OF-MY-WAY message to the agent
+						myAgent.addBehaviour(new GetOutOfMyWayBehaviour(this.myAgent, newpos.getLocationId(), temp_receivers));
+						return;
+					}
+					
 					me.moveTo(newpos);
 					return;
 				} else {
@@ -195,10 +248,10 @@ public class SearchBehaviour extends SimpleBehaviour {
 							break;
 						}
 					}
-					// create receivers list that's just the agent at newpos
+					// create receivers list that's just the agent that sent the message
 					List<String> temp_receivers = new ArrayList<>();
 					temp_receivers.add(msgReceived.getSender().getLocalName());
-					// send GET-OUT-OF-MY-WAY message to the agent at newpos
+					// send GET-OUT-OF-MY-WAY message to the agent
 					myAgent.addBehaviour(new GetOutOfMyWayBehaviour(this.myAgent, senderPositionId, temp_receivers));
 					return;
 				}
@@ -471,6 +524,15 @@ public class SearchBehaviour extends SimpleBehaviour {
 							}
 							return;
 						}
+					} else {
+						System.out.println(this.myAgent.getLocalName() + " - lockpick failed, adding to i_cant_open list.");
+						// add this node to the i_cant_open list
+						if (!this.i_cant_open.contains(myPositionId)) {
+							this.i_cant_open.add(myPositionId);
+							System.out.println(this.myAgent.getLocalName() + " - added " + myPositionId + " to i_cant_open list.");
+						} else {
+							System.out.println(this.myAgent.getLocalName() + " - " + myPositionId + " already in i_cant_open list.");
+						}
 					}
 				}
 			}
@@ -575,6 +637,8 @@ public class SearchBehaviour extends SimpleBehaviour {
 				} else {
 					//System.out.println(this.myAgent.getLocalName() + " - No known path to gold, continuing exploration.");
 				}
+			} else {
+				//System.out.println(this.myAgent.getLocalName() + " - No known gold, continuing exploration.");
 			}
 		}
 
@@ -694,6 +758,8 @@ public class SearchBehaviour extends SimpleBehaviour {
 		}
 
 		List<String> openResourceNodes = resourceMap.getOpenNodes();
+		// remove nodes that are in the i_cant_open list
+		openResourceNodes.removeAll(this.i_cant_open);
 		if (openResourceNodes.isEmpty()) return null;
 		
 		String closest = null;
