@@ -34,7 +34,7 @@ public class SearchBehaviour extends SimpleBehaviour {
 	
 	private static final long serialVersionUID = 1L;
 
-	private static final int TIMER = 400; // Time to wait between actions (in milliseconds)
+	private static final int TIMER = 100; // Time to wait between actions (in milliseconds)
 	
 	private boolean finished = false;
 	private MapRepresentation exploreMap; // Exploration map, unexplored nodes are open
@@ -50,6 +50,17 @@ public class SearchBehaviour extends SimpleBehaviour {
 	private HashMap<String, Boolean> expert_list; // List of agents that are experts (0 for non-expert, 1 for expert) (example: 001010 means agents 2 and 4 are experts, 0 1 3 5 are not)
 	
 	private List<String> i_cant_open; // List of resource nodes that this agent can't open (lockpick failure)
+	private List<String> i_just_came_from; // List of nodes that this agent just came from (to avoid going back)
+	private boolean empty_my_backpack; // Set to true when the agent should unload to avoid GOOMW blocking
+
+	private int sincelastgoomw_turn_counter; // Counter to keep track of turns (specific use case)
+	private int goomw_turnlimit; // Turn limit for GOOMW (specific use case)
+	private int stopexploring_turn_counter; // Counter to keep track of turns (specific use case)
+	private int stopexploring_turnlimit; // Turn limit for stopping exploration (specific use case)
+
+	private List<String> wumpus_locations; // List of wumpus locations (to remove from maps)
+	private int wumpus_counter; // Counter to keep track of turns (specific use case)
+	private int wumpus_turnlimit; // Turn limit for wumpus (specific use case)
 
 	public SearchBehaviour(final AbstractDedaleAgent myagent, MapRepresentation exploreMap, 
 																	MapRepresentation goldMap, 
@@ -87,11 +98,28 @@ public class SearchBehaviour extends SimpleBehaviour {
 
 		this.i_cant_open = new ArrayList<>(); // list of resource nodes that this agent can't open (lockpick failure)
 
+		this.i_just_came_from = new ArrayList<>(); // list of nodes that this agent just came from (to avoid going back)
+
+		this.empty_my_backpack = false; // set to true when the agent should unload to avoid GOOMW blocking
+
+		this.goomw_turnlimit = 5;
+		this.stopexploring_turnlimit = 8; // Turn limit for stopping exploration (specific use case)
+		this.wumpus_turnlimit = 15;
+
+		this.sincelastgoomw_turn_counter = this.goomw_turnlimit; // Counter to keep track of turns (specific use case)
+		this.stopexploring_turn_counter = this.stopexploring_turnlimit; // Counter to keep track of turns (specific use case)
+
+		this.wumpus_locations = new ArrayList<>(); // List of wumpus locations (to remove from maps)
+		this.wumpus_counter = this.wumpus_turnlimit;
+
 		this.finished = false; // Set to true when exploration is done
 	}
 	
 	@Override
 	public void action() {
+		this.sincelastgoomw_turn_counter++;
+		this.stopexploring_turn_counter++;
+		this.wumpus_counter++;
 		AbstractDedaleAgent me = (AbstractDedaleAgent) this.myAgent;
 		if (me == null) return;
 		System.out.println();
@@ -129,6 +157,12 @@ public class SearchBehaviour extends SimpleBehaviour {
 		
 		String myPositionId = myPosition.getLocationId();
 
+		// if current position is in wumpus locations, remove it, since if we're in this node it cant be a wumpus
+		if (this.wumpus_locations.contains(myPositionId)) {
+			this.wumpus_locations.remove(myPositionId);
+			System.out.println(this.myAgent.getLocalName() + " - removed " + myPositionId + " from wumpus_locations list.");
+		}
+
 		// 1) Observe
 		List<Couple<Location, List<Couple<Observation, String>>>> lobs = me.observe();
 		List<Couple<Observation, String>> here = lobs.get(0).getRight();
@@ -158,106 +192,61 @@ public class SearchBehaviour extends SimpleBehaviour {
 		}
 		this.tankerMap.addNode(myPosition.getLocationId(),MapAttribute.closed);
 
-		// ===================== RECEIVE GET-OUT-OF-MY-WAY ==============================
-		MessageTemplate msgTemplate=MessageTemplate.and(
-				MessageTemplate.MatchProtocol("GET-OUT-OF-MY-WAY"),
-				MessageTemplate.MatchPerformative(ACLMessage.INFORM));
-		ACLMessage msgReceived=this.myAgent.receive(msgTemplate);
-		if (msgReceived!=null) {
-			String path = null;
-			try {
-				path = (String) msgReceived.getContentObject();
-			} catch (UnreadableException e) {
-				e.printStackTrace();
-			}
-			System.out.println(this.myAgent.getLocalName() + " - Received GET-OUT-OF-MY-WAY from: " + msgReceived.getSender().getLocalName() + " - Path: " + path + " getting out of the way.");
-			// if current position is equal to path, move to random adjacent node
-			System.out.println(this.myAgent.getLocalName() + " - Current position: " + myPositionId + " - Path: " + path);
-			if (myPositionId.equals(path)) {
-				System.out.println(this.myAgent.getLocalName() + " - Current position "+ "(" + myPositionId + ") is equal to path "+ "(" + path + "), moving to random adjacent node.");
-				List<String> possibleMoves = new ArrayList<>();
-				for (int i = 1; i < lobs.size(); i++) {
-					String adjacentNodeId = lobs.get(i).getLeft().getLocationId();
-					if (!adjacentNodeId.equals(myPositionId) && !adjacentNodeId.equals(path)) {
-						possibleMoves.add(adjacentNodeId);
-					}
-				}
-				
-				if (!possibleMoves.isEmpty()) {
-					int randomIndex = new Random().nextInt(possibleMoves.size());
-					GsLocation newpos = new GsLocation(possibleMoves.get(randomIndex));
-					System.out.println(this.myAgent.getLocalName() + " - Moving to random adjacent node: " + newpos.getLocationId() + " to avoid collision with " + msgReceived.getSender().getLocalName());
-					
-					// check if there is yet another agent in the cell in newpos
-					String agentAtNewPos = null;
-					for (Couple<Location, List<Couple<Observation, String>>> obs : lobs) {
-						//System.out.println("Observation: " + obs.getLeft().getLocationId() + " - " + obs.getRight());
-						if (obs.getLeft().getLocationId().equals(newpos.getLocationId())) {
-							// Check if there's an agent at this location
-							for (Couple<Observation, String> o : obs.getRight()) {
-								//System.out.println("Observation: " + o.getLeft() + " - " + o.getRight());
-								if (o.getLeft() == Observation.AGENTNAME) {
-									//System.out.println(this.myAgent.getLocalName() + " - Another agent detected at " + path.get(0) + ", avoiding collision.");
-									agentAtNewPos = o.getRight();
-									break;
-								}
-							}
-							break;
-						}
-					}
+		
+		
+		// 4) Check for resources in the current location
 
-					// if there is yet another agent in the new position, send GET-OUT-OF-MY-WAY to that agent
-					if (agentAtNewPos != null) {
-						// if the other agent is a wumpus, dont bother sending it a message, just go back to possibleMoves.isEmpty() case
-						if (agentAtNewPos.equals("Wumpus")) {
-							System.out.println(this.myAgent.getLocalName() + " - Another agent detected at " + newpos.getLocationId() + ", but it's a Wumpus, so I'm not sending it a message.");
-							System.out.println(this.myAgent.getLocalName() + " - No possible moves to avoid collision, staying in original position: " + myPositionId + " sending GET-OUT-OF-MY-WAY back to " + msgReceived.getSender().getLocalName());
-							// get position of the sender
-							String senderPositionId = null;
-							for (Couple<Location, List<Couple<Observation, String>>> l : lobs) {
-								if (l.getLeft().getLocationId().equals(msgReceived.getSender().getLocalName())) {
-									senderPositionId = l.getLeft().getLocationId();
-									break;
-								}
+		if (targetResource != null && targetResourceIndex != -1) {
+			for (Couple<Observation, String> o : here) {
+				if (o.getLeft() == targetResource) {
+					MapRepresentation resourceMap = targetResource == Observation.GOLD ? this.goldMap : this.diamondMap;
+					
+					System.out.println(this.myAgent.getLocalName() + " - found " + targetResource + " at " + myPositionId);
+					System.out.println(this.myAgent.getLocalName() + " - My current backpack capacity is: " + me.getBackPackFreeSpace());
+					
+					if (getFreeSpace(me, targetResource) == 0) {
+						System.out.println(this.myAgent.getLocalName() + " - Backpack full, cannot pick " + targetResource + ", marking spot on map as open for future picking.");
+						resourceMap.addNode(myPositionId, MapAttribute.open);
+						break;
+					}
+					
+					System.out.println(this.myAgent.getLocalName() + " - Value of the treasure on the current position: " + o.getLeft() + ": " + o.getRight());
+					System.out.println(this.myAgent.getLocalName() + " - I try to open the safe");
+					
+					if (me.openLock(o.getLeft())) {
+						System.out.println(this.myAgent.getLocalName() + " - lock is open, trying to pick " + targetResource + "...");
+						int picked = me.pick();
+						
+						System.out.println(this.myAgent.getLocalName() + " - picked: " + picked);
+						System.out.println(this.myAgent.getLocalName() + " - remaining backpack capacity: " + me.getBackPackFreeSpace());
+						
+						if (picked > 0) {
+							System.out.println(this.myAgent.getLocalName() + " picked " + picked + " " + targetResource + "!");
+							if (getFreeSpace(me, targetResource) > 0) {
+								// Still room left in backpack, so there is none left in the cell to pick
+								// No more resources here, mark as closed in resource map
+								System.out.println(this.myAgent.getLocalName() + " - No more " + targetResource + " at " + myPositionId + ", marking as closed.");
+								resourceMap.addNode(myPositionId, MapAttribute.closed);
+							} else {
+								// Still resources here, mark as open in resource map
+								System.out.println(this.myAgent.getLocalName() + " - Still " + targetResource + " left at " + myPositionId + " after picking, leaving as open.");
+								resourceMap.addNode(myPositionId, MapAttribute.open);
 							}
-							// create receivers list that's just the agent at newpos
-							List<String> temp_receivers = new ArrayList<>();
-							temp_receivers.add(msgReceived.getSender().getLocalName());
-							// send GET-OUT-OF-MY-WAY message to the agent at newpos
-							myAgent.addBehaviour(new GetOutOfMyWayBehaviour(this.myAgent, senderPositionId, temp_receivers));
 							return;
 						}
-						System.out.println(this.myAgent.getLocalName() + " - Another agent detected at " + newpos.getLocationId() + ", sending it a GET-OUT-OF-MY-WAY message.");
-						// create receivers list that's just the agent that sent the message
-						List<String> temp_receivers = new ArrayList<>();
-						temp_receivers.add(agentAtNewPos);
-						// send GET-OUT-OF-MY-WAY message to the agent
-						myAgent.addBehaviour(new GetOutOfMyWayBehaviour(this.myAgent, newpos.getLocationId(), temp_receivers));
-						return;
-					}
-					
-					me.moveTo(newpos);
-					return;
-				} else {
-					System.out.println(this.myAgent.getLocalName() + " - No possible moves to avoid collision, staying in original position: " + myPositionId + " sending GET-OUT-OF-MY-WAY back to " + msgReceived.getSender().getLocalName());
-					// get position of the sender
-					String senderPositionId = null;
-					for (Couple<Location, List<Couple<Observation, String>>> l : lobs) {
-						if (l.getLeft().getLocationId().equals(msgReceived.getSender().getLocalName())) {
-							senderPositionId = l.getLeft().getLocationId();
-							break;
+					} else {
+						System.out.println(this.myAgent.getLocalName() + " - lockpick failed, adding to i_cant_open list.");
+						// add this node to the i_cant_open list
+						if (!this.i_cant_open.contains(myPositionId)) {
+							this.i_cant_open.add(myPositionId);
+							System.out.println(this.myAgent.getLocalName() + " - added " + myPositionId + " to i_cant_open list.");
+						} else {
+							System.out.println(this.myAgent.getLocalName() + " - " + myPositionId + " already in i_cant_open list.");
 						}
 					}
-					// create receivers list that's just the agent that sent the message
-					List<String> temp_receivers = new ArrayList<>();
-					temp_receivers.add(msgReceived.getSender().getLocalName());
-					// send GET-OUT-OF-MY-WAY message to the agent
-					myAgent.addBehaviour(new GetOutOfMyWayBehaviour(this.myAgent, senderPositionId, temp_receivers));
-					return;
 				}
 			}
 		}
-		// ==================================================================================
 
 		// ===================== RECEIVE AND SEND EXPERT LIST ==================================
 		// receive EXPERT_LIST message from other agents and update the expert list
@@ -405,6 +394,7 @@ public class SearchBehaviour extends SimpleBehaviour {
 					System.out.println(this.myAgent.getLocalName() + " - Backpack not empty, unloading " + targetResource + " at tanker in " + adjacentNodeId);
 					unloadBackpack(me);
 					unloaded = true;
+					this.empty_my_backpack = false; // set to true to avoid GOOMW blocking
 				} else {
 					//System.out.println(this.myAgent.getLocalName() + " - Backpack empty, nothing to unload. Marking tanker location for future use.");
 					// No need to return here - continue exploring
@@ -422,9 +412,152 @@ public class SearchBehaviour extends SimpleBehaviour {
 			}
 		}
 
+		// remove wumpus locations from maps if wumpus_counter is lower than wumpus_turnlimit
+		if (this.wumpus_counter < this.wumpus_turnlimit) {
+			this.exploreMap.removeNodes(wumpus_locations);
+			this.goldMap.removeNodes(wumpus_locations);
+			this.diamondMap.removeNodes(wumpus_locations);
+			this.tankerMap.removeNodes(wumpus_locations);
+		}
+
 		if (unloaded) {
 			return; // If unloaded, skip the rest of the action (unloading takes up one turn)
 		}
+
+		
+		// ===================== RECEIVE GET-OUT-OF-MY-WAY ==============================
+		MessageTemplate msgTemplate=MessageTemplate.and(
+				MessageTemplate.MatchProtocol("GET-OUT-OF-MY-WAY"),
+				MessageTemplate.MatchPerformative(ACLMessage.INFORM));
+		ACLMessage msgReceived=this.myAgent.receive(msgTemplate);
+		if (msgReceived!=null) {
+			String path = null;
+			try {
+				path = (String) msgReceived.getContentObject();
+			} catch (UnreadableException e) {
+				e.printStackTrace();
+			}
+			System.out.println(this.myAgent.getLocalName() + " - Received GET-OUT-OF-MY-WAY from: " + msgReceived.getSender().getLocalName() + " - Path: " + path + " getting out of the way.");
+			// if current position is equal to path, move to random adjacent node
+			System.out.println(this.myAgent.getLocalName() + " - Current position: " + myPositionId + " - Path: " + path);
+			
+			// if counter since last time GOOMW was received is lower than 3, set stopexploring to 0
+			if (this.sincelastgoomw_turn_counter < this.goomw_turnlimit) {
+				this.stopexploring_turn_counter = 0;
+			}
+			this.sincelastgoomw_turn_counter = 0; // reset counter since GOOMW was received
+
+			if (myPositionId.equals(path)) {
+				System.out.println(this.myAgent.getLocalName() + " - Current position "+ "(" + myPositionId + ") is equal to path "+ "(" + path + "), moving to random adjacent node.");
+				List<String> possibleMoves = new ArrayList<>();
+				for (int i = 1; i < lobs.size(); i++) {
+					String adjacentNodeId = lobs.get(i).getLeft().getLocationId();
+					String senderNodeId = null;
+					for (Couple<Location, List<Couple<Observation, String>>> l : lobs) {
+						if (l.getLeft().getLocationId().equals(msgReceived.getSender().getLocalName())) {
+							senderNodeId = l.getLeft().getLocationId();
+							break;
+						}
+					}
+					if (!adjacentNodeId.equals(myPositionId)
+						&& !adjacentNodeId.equals(path)
+						&& (senderNodeId == null || !adjacentNodeId.equals(senderNodeId))
+						&& !this.i_just_came_from.contains(adjacentNodeId)) {
+						possibleMoves.add(adjacentNodeId);
+					}
+				}
+				
+				if (!possibleMoves.isEmpty()) {
+					int randomIndex = new Random().nextInt(possibleMoves.size());
+					GsLocation newpos = new GsLocation(possibleMoves.get(randomIndex));
+					System.out.println(this.myAgent.getLocalName() + " - Moving to random adjacent node: " + newpos.getLocationId() + " to avoid collision with " + msgReceived.getSender().getLocalName());
+					
+					// check if there is yet another agent in the cell in newpos
+					String agentAtNewPos = null;
+					for (Couple<Location, List<Couple<Observation, String>>> obs : lobs) {
+						//System.out.println("Observation: " + obs.getLeft().getLocationId() + " - " + obs.getRight());
+						if (obs.getLeft().getLocationId().equals(newpos.getLocationId())) {
+							// Check if there's an agent at this location
+							for (Couple<Observation, String> o : obs.getRight()) {
+								//System.out.println("Observation: " + o.getLeft() + " - " + o.getRight());
+								if (o.getLeft() == Observation.AGENTNAME) {
+									//System.out.println(this.myAgent.getLocalName() + " - Another agent detected at " + path.get(0) + ", avoiding collision.");
+									agentAtNewPos = o.getRight();
+									break;
+								}
+							}
+							break;
+						}
+					}
+
+					// if there is yet another agent in the new position, send GET-OUT-OF-MY-WAY to that agent
+					if (agentAtNewPos != null) {
+						// if the other agent is a wumpus, dont bother sending it a message, just go back to possibleMoves.isEmpty() case
+						if (agentAtNewPos.equals("Wumpus")) {
+							System.out.println(this.myAgent.getLocalName() + " - Another agent detected at " + newpos.getLocationId() + ", but it's a Wumpus, so I'm not sending it a message.");
+							System.out.println(this.myAgent.getLocalName() + " - No possible moves to avoid collision, staying in original position: " + myPositionId + " sending GET-OUT-OF-MY-WAY back to " + msgReceived.getSender().getLocalName());
+							// add newpos to wumpus_locations list
+							if (!this.wumpus_locations.contains(newpos.getLocationId())) {
+								this.wumpus_locations.add(newpos.getLocationId());
+								this.wumpus_counter = 0; // reset counter since wumpus was found
+								System.out.println(this.myAgent.getLocalName() + " - added " + newpos.getLocationId() + " to wumpus_locations list.");
+							} else {
+								System.out.println(this.myAgent.getLocalName() + " - " + newpos.getLocationId() + " already in wumpus_locations list.");
+							}
+							// get position of the sender
+							String senderPositionId = null;
+							for (Couple<Location, List<Couple<Observation, String>>> l : lobs) {
+								if (l.getLeft().getLocationId().equals(msgReceived.getSender().getLocalName())) {
+									senderPositionId = l.getLeft().getLocationId();
+									break;
+								}
+							}
+							// create receivers list that's just the agent at newpos
+							List<String> temp_receivers = new ArrayList<>();
+							temp_receivers.add(msgReceived.getSender().getLocalName());
+							// send GET-OUT-OF-MY-WAY message to the agent at newpos
+							myAgent.addBehaviour(new GetOutOfMyWayBehaviour(this.myAgent, senderPositionId, temp_receivers));
+							return;
+						}
+						System.out.println(this.myAgent.getLocalName() + " - Another agent detected at " + newpos.getLocationId() + ", sending it a GET-OUT-OF-MY-WAY message.");
+						// create receivers list that's just the agent that sent the message
+						List<String> temp_receivers = new ArrayList<>();
+						temp_receivers.add(agentAtNewPos);
+						// send GET-OUT-OF-MY-WAY message to the agent
+						myAgent.addBehaviour(new GetOutOfMyWayBehaviour(this.myAgent, newpos.getLocationId(), temp_receivers));
+						return;
+					}
+					
+					me.moveTo(newpos);
+					return;
+				} else {
+					System.out.println(this.myAgent.getLocalName() + " - No possible moves to avoid collision, staying in original position: " + myPositionId + " sending GET-OUT-OF-MY-WAY back to " + msgReceived.getSender().getLocalName());
+					// add current position to i_just_came_from list
+					this.i_just_came_from.add(myPositionId);
+					// get position of the sender
+					String senderPositionId = null;
+					for (Couple<Location, List<Couple<Observation, String>>> l : lobs) {
+						if (l.getLeft().getLocationId().equals(msgReceived.getSender().getLocalName())) {
+							senderPositionId = l.getLeft().getLocationId();
+							break;
+						}
+					}
+					// create receivers list that's just the agent that sent the message
+					List<String> temp_receivers = new ArrayList<>();
+					temp_receivers.add(msgReceived.getSender().getLocalName());
+					// send GET-OUT-OF-MY-WAY message to the agent
+					myAgent.addBehaviour(new GetOutOfMyWayBehaviour(this.myAgent, senderPositionId, temp_receivers));
+					return;
+				}
+			}
+		} else {
+			//System.out.println(this.myAgent.getLocalName() + " - No GET-OUT-OF-MY-WAY message received.");
+			// empty i_just_came_from list
+			if (this.i_just_came_from.size() > 0) {
+				this.i_just_came_from.clear();
+			}
+		}
+		// ==================================================================================
 
 		// =============== SEND MAPS TO OTHER AGENTS =====================================
 		// add an instance of ShareMultiMapBehaviour to this agent's behaviours to send the maps to other agents
@@ -483,65 +616,24 @@ public class SearchBehaviour extends SimpleBehaviour {
 
 		// ===============================================================================
 
-		
-		// 4) Check for resources in the current location
-
-		if (targetResource != null && targetResourceIndex != -1) {
-			for (Couple<Observation, String> o : here) {
-				if (o.getLeft() == targetResource) {
-					MapRepresentation resourceMap = targetResource == Observation.GOLD ? this.goldMap : this.diamondMap;
-					
-					System.out.println(this.myAgent.getLocalName() + " - found " + targetResource + " at " + myPositionId);
-					System.out.println(this.myAgent.getLocalName() + " - My current backpack capacity is: " + me.getBackPackFreeSpace());
-					
-					if (getFreeSpace(me, targetResource) == 0) {
-						System.out.println(this.myAgent.getLocalName() + " - Backpack full, cannot pick " + targetResource + ", marking spot on map as open for future picking.");
-						resourceMap.addNode(myPositionId, MapAttribute.open);
-						break;
-					}
-					
-					System.out.println(this.myAgent.getLocalName() + " - Value of the treasure on the current position: " + o.getLeft() + ": " + o.getRight());
-					System.out.println(this.myAgent.getLocalName() + " - I try to open the safe");
-					
-					if (me.openLock(o.getLeft())) {
-						System.out.println(this.myAgent.getLocalName() + " - lock is open, trying to pick " + targetResource + "...");
-						int picked = me.pick();
-						
-						System.out.println(this.myAgent.getLocalName() + " - picked: " + picked);
-						System.out.println(this.myAgent.getLocalName() + " - remaining backpack capacity: " + me.getBackPackFreeSpace());
-						
-						if (picked > 0) {
-							System.out.println(this.myAgent.getLocalName() + " picked " + picked + " " + targetResource + "!");
-							if (getFreeSpace(me, targetResource) > 0) {
-								// Still room left in backpack, so there is none left in the cell to pick
-								// No more resources here, mark as closed in resource map
-								System.out.println(this.myAgent.getLocalName() + " - No more " + targetResource + " at " + myPositionId + ", marking as closed.");
-								resourceMap.addNode(myPositionId, MapAttribute.closed);
-							} else {
-								// Still resources here, mark as open in resource map
-								System.out.println(this.myAgent.getLocalName() + " - Still " + targetResource + " left at " + myPositionId + " after picking, leaving as open.");
-								resourceMap.addNode(myPositionId, MapAttribute.open);
-							}
-							return;
-						}
-					} else {
-						System.out.println(this.myAgent.getLocalName() + " - lockpick failed, adding to i_cant_open list.");
-						// add this node to the i_cant_open list
-						if (!this.i_cant_open.contains(myPositionId)) {
-							this.i_cant_open.add(myPositionId);
-							System.out.println(this.myAgent.getLocalName() + " - added " + myPositionId + " to i_cant_open list.");
-						} else {
-							System.out.println(this.myAgent.getLocalName() + " - " + myPositionId + " already in i_cant_open list.");
-						}
-					}
-				}
-			}
+		// if stopexploring counter is lower than 3, return here
+		if (this.stopexploring_turn_counter < this.stopexploring_turnlimit) {
+			System.out.println(this.myAgent.getLocalName() + " - Stopexploring counter: " + this.stopexploring_turn_counter);
+			return;
 		}
 
-		// 5) Check if backpack is full and handle unloading to tanker (also if exploration is done but backpack is not emptied)
-		if ((targetResourceIndex != -1 && getFreeSpace(me, targetResource) == 0) ||  (!this.exploreMap.hasOpenNode() && targetResourceIndex != -1 && getFreeSpace(me, targetResource) < ((CollectorAgent) me).getCapacity().get(targetResourceIndex))) {
-		    System.out.println(this.myAgent.getLocalName() + " - Backpack full, looking for tanker to unload resources.");
-		    System.out.println(this.myAgent.getLocalName() + " - My current backpack capacity is: " + me.getBackPackFreeSpace());
+		// ===============================================================================
+
+		// 5) Check if backpack is full and handle unloading to tanker (also if exploration is done but backpack is not emptied) (or if the agent is in a GOOMW situation, helps relieve congestion)
+		if ((targetResourceIndex != -1 && getFreeSpace(me, targetResource) == 0) ||  
+			(!this.exploreMap.hasOpenNode() && targetResourceIndex != -1 && getFreeSpace(me, targetResource) < ((CollectorAgent) me).getCapacity().get(targetResourceIndex)) ||
+			(this.empty_my_backpack)) {
+			if (this.empty_my_backpack) {
+				System.out.println(this.myAgent.getLocalName() + " - Emptying backpack to avoid GOOMW blocking.");
+			} else {
+				System.out.println(this.myAgent.getLocalName() + " - Backpack full, looking for tanker to unload resources.");
+			}
+			System.out.println(this.myAgent.getLocalName() + " - My current backpack capacity is: " + me.getBackPackFreeSpace());
 		
 		    // Find path to nearest tanker if known
 		    String tankerNodeId = findClosestTankerNode(myPositionId);
@@ -572,8 +664,23 @@ public class SearchBehaviour extends SimpleBehaviour {
 
 					// If there's another agent at newpos, send a GET-OUT-OF-MY-WAY message to the agent
 					if (agentAtNewPos != null) {
-
+						// TODO
+						if (agentAtNewPos.equals("Wumpus")) {
+							System.out.println(this.myAgent.getLocalName() + " - Another agent detected at " + newpos.getLocationId() + ", but it's a Wumpus, so I'm not sending it a message.");
+							System.out.println(this.myAgent.getLocalName() + " - No possible moves to avoid collision, staying in original position: " + myPositionId);
+							this.wumpus_counter = 0; // reset counter since wumpus was found
+							// add newpos to wumpus_locations list
+							if (!this.wumpus_locations.contains(newpos.getLocationId())) {
+								this.wumpus_locations.add(newpos.getLocationId());
+								System.out.println(this.myAgent.getLocalName() + " - added " + newpos.getLocationId() + " to wumpus_locations list.");
+							} else {
+								System.out.println(this.myAgent.getLocalName() + " - " + newpos.getLocationId() + " already in wumpus_locations list.");
+							}
+							return;
+						}
 						System.out.println(this.myAgent.getLocalName() + " - Another agent ("+ agentAtNewPos +") detected in path at " + path.get(0) + ", sending GET-OUT-OF-MY-WAY message to it to avoid collision.");
+						
+						
 						// create receivers list that's just the agent at newpos
 						List<String> temp_receivers = new ArrayList<>();
 						temp_receivers.add(agentAtNewPos);
@@ -623,6 +730,20 @@ public class SearchBehaviour extends SimpleBehaviour {
 
 					// If there's another agent at newpos, send a GET-OUT-OF-MY-WAY message to the agent
 					if (agentAtNewPos != null) {
+						// TODO
+						if (agentAtNewPos.equals("Wumpus")) {
+							System.out.println(this.myAgent.getLocalName() + " - Another agent detected at " + newpos.getLocationId() + ", but it's a Wumpus, so I'm not sending it a message.");
+							System.out.println(this.myAgent.getLocalName() + " - No possible moves to avoid collision, staying in original position: " + myPositionId);
+							this.wumpus_counter = 0; // reset counter since wumpus was found
+							// add newpos to wumpus_locations list
+							if (!this.wumpus_locations.contains(newpos.getLocationId())) {
+								this.wumpus_locations.add(newpos.getLocationId());
+								System.out.println(this.myAgent.getLocalName() + " - added " + newpos.getLocationId() + " to wumpus_locations list.");
+							} else {
+								System.out.println(this.myAgent.getLocalName() + " - " + newpos.getLocationId() + " already in wumpus_locations list.");
+							}
+							return;
+						}
 						System.out.println(this.myAgent.getLocalName() + " - Another agent ("+ agentAtNewPos +") detected in path at " + path.get(0) + ", sending GET-OUT-OF-MY-WAY message to it to avoid collision.");
 						// create receivers list that's just the agent at newpos
 						List<String> temp_receivers = new ArrayList<>();
@@ -670,6 +791,20 @@ public class SearchBehaviour extends SimpleBehaviour {
 
 				// If there's another agent at newpos, send a GET-OUT-OF-MY-WAY message to the agent
 				if (agentAtNewPos != null) {
+					// TODO
+					if (agentAtNewPos.equals("Wumpus")) {
+							System.out.println(this.myAgent.getLocalName() + " - Another agent detected at " + newpos.getLocationId() + ", but it's a Wumpus, so I'm not sending it a message.");
+							System.out.println(this.myAgent.getLocalName() + " - No possible moves to avoid collision, staying in original position: " + myPositionId);
+							this.wumpus_counter = 0; // reset counter since wumpus was found
+							// add newpos to wumpus_locations list
+							if (!this.wumpus_locations.contains(newpos.getLocationId())) {
+								this.wumpus_locations.add(newpos.getLocationId());
+								System.out.println(this.myAgent.getLocalName() + " - added " + newpos.getLocationId() + " to wumpus_locations list.");
+							} else {
+								System.out.println(this.myAgent.getLocalName() + " - " + newpos.getLocationId() + " already in wumpus_locations list.");
+							}
+							return;
+						}
 					System.out.println(this.myAgent.getLocalName() + " - Another agent ("+ agentAtNewPos +") detected in path at " + path.get(0) + ", sending GET-OUT-OF-MY-WAY message to it to avoid collision.");
 					// create receivers list that's just the agent at newpos
 					List<String> temp_receivers = new ArrayList<>();
@@ -689,7 +824,15 @@ public class SearchBehaviour extends SimpleBehaviour {
 			if (targetResourceIndex != -1 && getFreeSpace(me, targetResource) < ((CollectorAgent) me).getCapacity().get(targetResourceIndex)) {
 				System.out.println(this.myAgent.getLocalName() + " - Backpack not empty, looking for tanker to unload resources before finishing exploration.");
 				return;
-			}
+			} 
+			// if exploration is done but this is a collector agent and the target resource map has open nodes, keep exploring
+			if (targetResourceIndex != -1) {
+				List<String> openResourceNodes = targetResource == Observation.GOLD ? this.goldMap.getOpenNodes() : this.diamondMap.getOpenNodes();
+				if (!openResourceNodes.isEmpty()) {
+					System.out.println(this.myAgent.getLocalName() + " - Exploration done, but not all agents are experts. Moving randomly while sending EXPERT_LIST message to all nearby agents.");
+					return;
+				}
+			} 
 			// else if every other receiver is not verified experts, keep sending expert messages and updating expert_list
 			boolean allExperts = true;
 			for (Boolean isExpert : expert_list.values()) {

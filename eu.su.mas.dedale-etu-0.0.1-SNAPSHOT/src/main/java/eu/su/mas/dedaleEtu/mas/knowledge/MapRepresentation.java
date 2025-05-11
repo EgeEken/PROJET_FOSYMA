@@ -401,50 +401,20 @@ public class MapRepresentation implements Serializable {
 		return getShortestPath(myPosition,closest.get().getLeft());
 	}
 
-	public List<String> getShortestPath_withoutNode(String idFrom, String idTo, List<String> avoid) {
-    	List<String> shortestPath = new ArrayList<>();
-		
-    	// Temporarily remove avoided nodes
-    	List<Node> removedNodes = new ArrayList<>();
-    	for (String nodeId : avoid) {
-    	    Node node = g.getNode(nodeId);
-    	    if (node != null) {
-    	        removedNodes.add(node);
-    	        node.removeFromGraph();
-    	    }
-    	}
-	
-    	try {
-    	    Dijkstra dijkstra = new Dijkstra();
-    	    dijkstra.init(g);
-    	    dijkstra.setSource(g.getNode(idFrom));
-    	    dijkstra.compute();
-		
-    	    List<Node> path = dijkstra.getPath(g.getNode(idTo)) != null
-    	        ? dijkstra.getPath(g.getNode(idTo)).getNodePath()
-    	        : null;
-		
-    	    if (path == null || path.isEmpty()) {
-    	        return null;
-    	    }
-		
-    	    Iterator<Node> iter = path.iterator();
-    	    while (iter.hasNext()) {
-    	        shortestPath.add(iter.next().getId());
-    	    }
-    	    dijkstra.clear();
-		
-    	    if (!shortestPath.isEmpty()) {
-    	        shortestPath.remove(0); // remove the current position
-    	    }
-    	    return shortestPath.isEmpty() ? null : shortestPath;
-    	} finally {
-    	    // Restore removed nodes (re-add them to the graph)
-    	    for (Node node : removedNodes) {
-    	        g.addNode(node.getId());
-    	        // Optionally restore attributes if needed
-        	}
-    	}
+	public void removeNode(String id) {
+		Node n=this.g.getNode(id);
+		if (n!=null) {
+			this.g.removeNode(id);
+		}
+	}
+
+	public void removeNodes(List<String> ids) {
+		for (String id:ids) {
+			Node n=this.g.getNode(id);
+			if (n!=null) {
+				this.g.removeNode(id);
+			}
+		}
 	}
 
 }
