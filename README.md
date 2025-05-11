@@ -4,6 +4,10 @@ The final project for my FOSYMA (Fondaments des Systèmes Multi-Agents) class in
 ## Report
 The report is in the 13-EKEN.pdf file. The latex code for the report is in EKEN_RAPPORT.tex.
 
+## Example Execution:
+
+https://github.com/user-attachments/assets/c65a5825-ee63-4eb1-96be-c095eda69585
+
 ## Code
 The code is written in Java, using the JADE / DEDALE framework. All of the code is in the eu.su.mas.dedale-eu-0.0.1-SNAPSHOT folder. To run the code, you need to initialize the project with Maven on Eclipse, then run the Principal.java file in the src/main/java/eu/su/mas/dedaleEtu/princ/ folder.
 
@@ -34,5 +38,25 @@ The behaviours are in the eu.su.mas.dedaleEtu.behaviours package. The behaviours
 - goldMap: the map that stores the information about where gold is located. Open nodes mean remaining gold, closed nodes mean no gold (ever or left).
 - diamondMap: same as goldMap, but for diamonds.
 - tankerMap: the map that stores the information about where the tanker agent is located. Open nodes mean the tanker agent is there, closed nodes mean it is not there.
+
+## Example maps from the perspective of an Explorer agent:
+### Example of a real simulation:
+
+<img src="https://github.com/user-attachments/assets/acf77af0-6cb7-45fc-aaf2-c3efeb91ad7e" alt="Real Simulation" width="50%" />
+
+### Explore map example 
+(in this map, the entire topology has been explored, the tanker node is not added to the map for pathfinding purposes):
+
+<img src="https://github.com/user-attachments/assets/87209069-7f12-485a-bdcc-b2727e7737cc" alt="Explore Map" width="50%" />
+
+### Resource map example
+(in this map, nodes where to the agent's latest knowledge there are remaining resources are marked open, the tanker node is not added to the map for pathfinding purposes)
+
+<img src="https://github.com/user-attachments/assets/00c27217-a5cc-4014-a0bd-ef46eae678f3" alt="Resource Map" width="50%" />
+
+### Tanker map example
+(in this map, the tanker node is marked open, the rest are closed)
+
+<img src="https://github.com/user-attachments/assets/8ab29a48-ab5b-47ff-8083-079462e7020a" alt="Tanker Map" width="50%" />
 
 ### Other features and notes are explained in the report. (13-EKEN.pdf)
