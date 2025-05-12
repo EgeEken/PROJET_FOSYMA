@@ -5,7 +5,7 @@ The final project for my FOSYMA (Fondaments des Systèmes Multi-Agents) class in
 The report is in the 13-EKEN.pdf file. The latex code for the report is in EKEN_RAPPORT.tex.
 
 ## Presentation
-[Slides link](https://docs.google.com/presentation/d/1EE5kmaVsPP6BmzAg_GiKd_IMBgNK9K2X0YrcVUpuoKE/edit?slide=id.gc6f919934_0_0#slide=id.gc6f919934_0_0)
+[/PROJET_FOSYMA/FOSYMA_PRESENTATION.pdf](https://github.com/EgeEken/PROJET_FOSYMA/blob/main/FOSYMA%20PRESENTATION.pdf)
 
 ## Example Execution:
 
