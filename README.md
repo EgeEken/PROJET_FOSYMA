@@ -2,10 +2,11 @@
 The final project for my FOSYMA (Fondaments des Systèmes Multi-Agents) class in the second semester of my first year in the ANDROIDE / AI2D Master at Sorbonne University (UPMC).
 
 ## Report
-The report is in the 13-EKEN.pdf file. The latex code for the report is in EKEN_RAPPORT.tex.
+The report is in the 
+[13-EKEN.pdf](https://github.com/EgeEken/PROJET_FOSYMA/blob/main/13-EKEN.pdf) file. The latex code for the report is in [EKEN_RAPPORT.tex](https://github.com/EgeEken/PROJET_FOSYMA/blob/main/EKEN_RAPPORT.tex) .
 
 ## Presentation
-[/PROJET_FOSYMA/FOSYMA_PRESENTATION.pdf](https://github.com/EgeEken/PROJET_FOSYMA/blob/main/FOSYMA%20PRESENTATION.pdf)
+[FOSYMA_PRESENTATION.pdf](https://github.com/EgeEken/PROJET_FOSYMA/blob/main/FOSYMA%20PRESENTATION.pdf)
 
 ## Example Execution:
 
